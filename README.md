@@ -1,4 +1,6 @@
 # DVIA-v2
+
+[![Git](https://app.soluble.cloud/api/v1/public/badges/19830954-aee2-4728-9a73-d1cadc97c4f1.svg?orgId=320408544746)](https://app.soluble.cloud/repos/details/github.com/jsoehner/dvia2?orgId=320408544746)  
 DVIA-v2 written in Swift along with additional vulnerabilities
 
 Damn Vulnerable iOS App (DVIA) is an iOS application that is damn vulnerable. Its main goal is to provide a platform to mobile security enthusiasts/professionals or students to test their iOS penetration testing skills in a legal environment. This project is developed and maintained by @prateekg147. The vulnerabilities and solutions covered in this app are tested up to iOS 11. The current version is writen in Swift and has the following vulnerabilities.
