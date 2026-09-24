@@ -1,0 +1,13 @@
+[allowlist]
+description = "Allowlist for test fixtures, certificates, and demo mock secrets"
+paths = [
+  '''(?i)demo/''',
+  '''(?i)tests?/''',
+  '''(?i)policy/policy_data\.json''',
+  '''(?i)certs/''',
+  '''(?i)\.key$''',
+  '''(?i)config-skills/''',
+  '''(?i)skills/''',
+  '''(?i)\.vscode/settings\.json''',
+  '''(?i)spire_setup/'''
+]
