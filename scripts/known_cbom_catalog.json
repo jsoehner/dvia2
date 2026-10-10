@@ -1,0 +1,106 @@
+{
+  "$schema": "https://cyclonedx.org/schema/bom-1.6.schema.json",
+  "catalogVersion": "1.0.0",
+  "description": "Known Cryptographic Bill of Materials (CBOM) Profiles and Attestations for Third-Party Binaries & Dependencies",
+  "components": [
+    {
+      "name": "tomcat-embed-core",
+      "purlPattern": "^pkg:maven/org\\.apache\\.tomcat\\.embed/tomcat-embed-core(@.*)?$",
+      "category": "infrastructure",
+      "confidence": "HIGH",
+      "source": "Apache Tomcat Security Advisory & JSSE Specification",
+      "cryptoAssets": [
+        {
+          "name": "Tomcat TLS Transport Engine",
+          "primitive": "protocol",
+          "algorithm": "TLS 1.2 / TLS 1.3",
+          "pqc_status": "QUANTUM-VULNERABLE",
+          "key_length": "RSA-2048 / ECDSA-P256",
+          "remediation": "Upgrade to Post-Quantum hybrid key exchange (X25519+ML-KEM-768) via OpenSSL 3.4+ or Java 25 JSSE provider"
+        },
+        {
+          "name": "Tomcat TLS Symmetric Cipher Suites",
+          "primitive": "block-cipher",
+          "algorithm": "AES-256-GCM / ChaCha20-Poly1305",
+          "pqc_status": "CLASSICAL/SYMMETRIC",
+          "key_length": "256",
+          "remediation": "Quantum-Resistant against Grover's algorithm"
+        }
+      ]
+    },
+    {
+      "name": "amqp-client",
+      "purlPattern": "^pkg:maven/com\\.rabbitmq/amqp-client(@.*)?$",
+      "category": "infrastructure",
+      "confidence": "HIGH",
+      "source": "RabbitMQ Transport Security Specification",
+      "cryptoAssets": [
+        {
+          "name": "RabbitMQ AMQPS Transport",
+          "primitive": "protocol",
+          "algorithm": "TLS 1.2 / TLS 1.3 (JSSE)",
+          "pqc_status": "QUANTUM-VULNERABLE",
+          "key_length": "RSA-2048 / ECDSA-P256",
+          "remediation": "Configure TLS 1.3 hybrid post-quantum cipher suites in RabbitMQ broker & client connection factory"
+        }
+      ]
+    },
+    {
+      "name": "spring-web",
+      "purlPattern": "^pkg:maven/org\\.springframework/spring-web(@.*)?$",
+      "category": "framework",
+      "confidence": "HIGH",
+      "source": "Spring Framework HTTP Client Security Specification",
+      "cryptoAssets": [
+        {
+          "name": "Spring WebClient / RestTemplate HTTPS",
+          "primitive": "protocol",
+          "algorithm": "HTTPS / TLS 1.3",
+          "pqc_status": "QUANTUM-VULNERABLE",
+          "key_length": "ECDH-X25519 / RSA-2048",
+          "remediation": "Ensure target AI endpoints (e.g. Ollama/OpenAI) and client support hybrid post-quantum key encapsulation (ML-KEM-768)"
+        }
+      ]
+    },
+    {
+      "name": "jackson-databind",
+      "purlPattern": "^pkg:maven/com\\.fasterxml\\.jackson\\.core/jackson-databind(@.*)?$",
+      "category": "serialization",
+      "confidence": "HIGH",
+      "source": "Verified Cryptographically Inert",
+      "cryptoAssets": []
+    },
+    {
+      "name": "jsoup",
+      "purlPattern": "^pkg:maven/org\\.jsoup/jsoup(@.*)?$",
+      "category": "parser",
+      "confidence": "HIGH",
+      "source": "Verified Cryptographically Inert",
+      "cryptoAssets": []
+    },
+    {
+      "name": "metadata-extractor",
+      "purlPattern": "^pkg:maven/com\\.drewnoakes/metadata-extractor(@.*)?$",
+      "category": "parser",
+      "confidence": "HIGH",
+      "source": "Verified Cryptographically Inert",
+      "cryptoAssets": []
+    },
+    {
+      "name": "micrometer-registry-prometheus",
+      "purlPattern": "^pkg:maven/io\\.micrometer/micrometer-registry-prometheus(@.*)?$",
+      "category": "telemetry",
+      "confidence": "HIGH",
+      "source": "Verified Cryptographically Inert",
+      "cryptoAssets": []
+    },
+    {
+      "name": "aspectjweaver",
+      "purlPattern": "^pkg:maven/org\\.aspectj/aspectjweaver(@.*)?$",
+      "category": "bytecode",
+      "confidence": "HIGH",
+      "source": "Verified Cryptographically Inert",
+      "cryptoAssets": []
+    }
+  ]
+}

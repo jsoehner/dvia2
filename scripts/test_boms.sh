@@ -94,7 +94,11 @@ fi
 # 5. Run Cryptographic Inventory & PQC Audit
 echo "[4/4] Running Cryptographic Audit & PQC Assessment ..."
 if [[ -f "$CBOM_FILE" && -s "$CBOM_FILE" && -f "$ANALYZER" ]]; then
-    python3 "$ANALYZER" "$CBOM_FILE"
+    if [[ -n "$SBOM_FILE" && -f "$SBOM_FILE" ]]; then
+        python3 "$ANALYZER" "$CBOM_FILE" --sbom "$SBOM_FILE"
+    else
+        python3 "$ANALYZER" "$CBOM_FILE"
+    fi
     echo "✅ AUDIT COMPLETE"
 elif [[ ! -f "$ANALYZER" ]]; then
     echo "⚠️ analyze_cbom.py not found at ${ANALYZER}, skipping detailed analysis."

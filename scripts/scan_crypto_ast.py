@@ -52,8 +52,22 @@ IGNORED_DIRS = {
 }
 
 IGNORED_FILES = {
-    "scan_crypto_ast.py", "analyze_cbom.py", "test_boms.sh", "generate_boms.sh"
+    "scan_crypto_ast.py", "analyze_cbom.py", "test_boms.sh", "generate_boms.sh",
+    "parse_cbom.py", "parse_gpg.py", "inject_algo.py"
 }
+
+# Ignore parser tools, benchmarks, and test fixtures when scanning production AST
+IGNORED_FILE_PREFIXES = ("parse_", "test_", "mock_")
+IGNORED_FILE_SUFFIXES = ("_test.py", "_spec.js", "_spec.ts", ".test.js", ".test.ts")
+
+# Patterns indicating string mappings, CLI definitions, or regexes rather than crypto instantiations
+NON_CALL_PATTERNS = [
+    r"^\s*[\"'][0-9a-zA-Z_-]+[\"']\s*:\s*[\"']",  # Dictionary mapping e.g. "1": "RSA"
+    r"^\s*(?:help|description|epilog|usage)\s*=",    # CLI argument help text
+    r"(?:keywords|keyword_list|vulnerable_keywords|pqc_keywords|ALGO_MAP)\s*=\s*\[", # Keyword lists
+    r"parser\.add_argument\(",                        # ArgumentParser calls
+    r"^\s*(?:print|logger\.\w+|console\.log)\s*\(",   # Logging/printing
+]
 
 
 def scan_source_files(root_dir: Path) -> List[Dict[str, Any]]:
@@ -67,6 +81,10 @@ def scan_source_files(root_dir: Path) -> List[Dict[str, Any]]:
         for fname in filenames:
             if fname in IGNORED_FILES:
                 continue
+            if any(fname.startswith(prefix) for prefix in IGNORED_FILE_PREFIXES):
+                continue
+            if any(fname.endswith(suffix) for suffix in IGNORED_FILE_SUFFIXES):
+                continue
 
             ext = os.path.splitext(fname)[1].lower()
             if ext not in SOURCE_EXTENSIONS:
@@ -77,9 +95,49 @@ def scan_source_files(root_dir: Path) -> List[Dict[str, Any]]:
             
             try:
                 with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+                    in_multiline_comment = False
+                    multiline_delim = None
+
                     for lineno, line in enumerate(f, start=1):
                         line_stripped = line.strip()
-                        if line_stripped.startswith("//") or line_stripped.startswith("#") or line_stripped.startswith("/*"):
+
+                        # Python triple-quote docstring tracking
+                        if not in_multiline_comment:
+                            for delim in ('"""', "'''"):
+                                if line_stripped.startswith(delim):
+                                    in_multiline_comment = True
+                                    multiline_delim = delim
+                                    # Check if closed on same line (e.g. """docstring""")
+                                    if line_stripped.count(delim) >= 2:
+                                        in_multiline_comment = False
+                                        multiline_delim = None
+                                    break
+                            if in_multiline_comment:
+                                continue
+                        else:
+                            if multiline_delim and multiline_delim in line_stripped:
+                                in_multiline_comment = False
+                                multiline_delim = None
+                            continue
+
+                        # C-style multiline comment tracking
+                        if line_stripped.startswith("/*"):
+                            if "*/" not in line_stripped:
+                                in_multiline_comment = True
+                                multiline_delim = "*/"
+                            continue
+                        elif in_multiline_comment and multiline_delim == "*/":
+                            if "*/" in line_stripped:
+                                in_multiline_comment = False
+                                multiline_delim = None
+                            continue
+
+                        # Single-line comment check
+                        if line_stripped.startswith("//") or line_stripped.startswith("#") or line_stripped.startswith("*"):
+                            continue
+
+                        # Filter non-call statements (dicts, CLI help, print statements, keyword lists)
+                        if any(re.search(pat, line) for pat in NON_CALL_PATTERNS):
                             continue
                         
                         for rule in CRYPTO_PATTERNS:
