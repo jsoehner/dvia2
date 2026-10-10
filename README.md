@@ -42,3 +42,7 @@ The best way to install DVIA is using <a href="www.cydiaimpactor.com/
 4. For running on the device, go under Project settings in Xcode on the top left, head over to the <em>General</em> tab and under <em>Signing</em>, enter credentials for your Apple ID.
 5. Now you can build and run the project on the device. You will have to trust the app again by going under Settings -> General -> Device Management. 
 
+
+
+## 🛡️ Security & Cryptographic Posture
+This project tracks Software & Cryptographic Bill of Materials (SBOM & CBOM) and Post-Quantum Cryptography (PQC) readiness. See the latest [Cryptographic Audit & PQC Migration Report](docs/security/CRYPTOGRAPHIC_AUDIT.md).
