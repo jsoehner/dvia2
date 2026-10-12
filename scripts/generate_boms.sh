@@ -13,12 +13,16 @@
 
 set -euo pipefail
 
+# Get the absolute path of the skill root directory
+SKILL_DIR=$(cd "$(dirname "$0")/.." && pwd)
+
 # Default settings
 TARGET_TYPE="docker"      # "docker" or "dir"
 TARGET=""
 OUTPUT_DIR="oss"
 SBOM_FORMAT="spdx-json"   # "spdx-json" or "cyclonedx-json"
 VERBOSE=false
+SCAN_OS=false
 
 usage() {
     local exit_code="${1:-1}"
@@ -31,14 +35,16 @@ Arguments:
 Options:
   -t, --type TYPE       Target type: 'docker' (default) or 'dir'
   -o, --output-dir DIR  Directory to store generated BOMs (default: oss)
-  -f, --format FORMAT   SBOM format: 'spdx-json' (default), 'cyclonedx-json'
+  -f, --format FORMAT       SBOM format: 'spdx-json' (default), 'cyclonedx-json'
   -v, --verbose         Enable verbose log output
+  -s, --scan-os         Scan and update OS cryptographic inventory (nightly update)
   -h, --help            Show this help message and exit
 
 Examples:
   $(basename "$0") my-demo-app:local
   $(basename "$0") -t dir -o build/boms .
   $(basename "$0") -t docker -o artifacts my-registry.io/app:v1.0.0
+  $(basename "$0") --scan-os
 EOF
     exit "$exit_code"
 }
@@ -62,6 +68,10 @@ while [[ $# -gt 0 ]]; do
             VERBOSE=true
             shift
             ;;
+        -s|--scan-os)
+            SCAN_OS=true
+            shift
+            ;;
         -h|--help)
             usage 0
             ;;
@@ -81,8 +91,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -z "$TARGET" ]]; then
-    echo "Error: Target is required." >&2
+if [[ -z "$TARGET" ]] && [[ "$SCAN_OS" == "false" ]]; then
+    echo "Error: Target is required unless --scan-os is provided." >&2
     usage
 fi
 
@@ -106,6 +116,15 @@ CBOM_OUTPUT="${OUTPUT_DIR}/cbom.json"
 
 log "Target: $TARGET (type: $TARGET_TYPE)"
 log "Output directory: $OUTPUT_DIR"
+
+# ------------------------------------------------------------------------------
+# 0. OS Inventory Update
+# ------------------------------------------------------------------------------
+if [[ "$SCAN_OS" == "true" ]]; then
+    log "Running OS inventory update..."
+    python3 "$SKILL_DIR/scripts/update_os_inventory.py"
+    log "OS inventory update complete."
+fi
 
 # ------------------------------------------------------------------------------
 # 1. Generate SBOM (using syft if installed, else fallback to cdxgen)
@@ -135,22 +154,36 @@ fi
 log "SBOM generated successfully: $SBOM_OUTPUT"
 
 # ------------------------------------------------------------------------------
-# 2. Generate CBOM (using cdxgen with --include-crypto)
+# 2. Discover or Generate CBOM (Cryptographic Bill of Materials)
 # ------------------------------------------------------------------------------
-log "Step 2: Generating Cryptographic Bill of Materials (CBOM)..."
+log "Step 2: Resolving Cryptographic Bill of Materials (CBOM)..."
 
-if [[ ${#CDXGEN_CMD[@]} -eq 0 ]]; then
-    echo "Error: 'cdxgen' or 'npx' is required to generate CBOM with cryptographic inventory." >&2
-    echo "Install via: npm install -g @cyclonedx/cdxgen" >&2
-    exit 1
-fi
-
-log "Running cdxgen with cryptographic discovery (${CDXGEN_CMD[*]})..."
+FETCHED_FROM_OCI=false
 if [[ "$TARGET_TYPE" == "docker" ]]; then
-    "${CDXGEN_CMD[@]}" -t docker --include-crypto -o "$CBOM_OUTPUT" "$TARGET"
-else
-    "${CDXGEN_CMD[@]}" --include-crypto -o "$CBOM_OUTPUT" "$TARGET"
+    FETCH_SCRIPT="${SKILL_DIR}/scripts/fetch_oci_cbom.py"
+    if [[ -f "$FETCH_SCRIPT" ]]; then
+        log "Checking OCI Distribution Spec v1.1+ registry referrers for pre-attached upstream CBOM..."
+        if python3 "$FETCH_SCRIPT" "$TARGET" -o "$CBOM_OUTPUT" 2>/dev/null; then
+            log "✅ Discovered and retrieved pre-attached upstream CBOM via OCI Referrers API / ORAS!"
+            FETCHED_FROM_OCI=true
+        fi
+    fi
 fi
 
-log "CBOM generated successfully: $CBOM_OUTPUT"
+if [[ "$FETCHED_FROM_OCI" == "false" ]]; then
+    if [[ ${#CDXGEN_CMD[@]} -eq 0 ]]; then
+        echo "Error: 'cdxgen' or 'npx' is required to generate CBOM with cryptographic inventory." >&2
+        echo "Install via: npm install -g @cyclonedx/cdxgen" >&2
+        exit 1
+    fi
+
+    log "No pre-attached OCI CBOM found. Running deep cryptographic analysis (${CDXGEN_CMD[*]} --include-crypto)..."
+    if [[ "$TARGET_TYPE" == "docker" ]]; then
+        "${CDXGEN_CMD[@]}" -t docker --include-crypto -o "$CBOM_OUTPUT" "$TARGET"
+    else
+        "${CDXGEN_CMD[@]}" --include-crypto -o "$CBOM_OUTPUT" "$TARGET"
+    fi
+fi
+
+log "CBOM resolved successfully: $CBOM_OUTPUT"
 log "BOM generation process complete."
