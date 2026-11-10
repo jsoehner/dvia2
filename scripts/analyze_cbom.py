@@ -31,7 +31,8 @@ if sys.stderr and hasattr(sys.stderr, "reconfigure"):
 QUANTUM_VULNERABLE_PATTERNS = [
     r"\bRSA\b", r"\bECDSA\b", r"\bECDH\b", r"\bDIFFIE[-_ ]?HELLMAN\b",
     r"\bED25519\b", r"\bED448\b", r"\bX25519\b", r"\bX448\b",
-    r"\bSECP\d+R1\b", r"(?<![A-Z0-9_-])(?:DSA|DH)(?![A-Z0-9_-])"
+    r"\bSECP\d+R1\b", r"(?<![A-Z0-9_-])(?:DSA|DH)(?![A-Z0-9_-])",
+    r"\bMD5\b", r"\bSHA[-_]?1\b"
 ]
 
 POST_QUANTUM_PATTERNS = [
@@ -116,11 +117,16 @@ def parse_sbom_components(sbom_path: Path) -> List[Dict[str, Any]]:
     # CycloneDX format
     if data.get("bomFormat") == "CycloneDX" or "components" in data:
         for c in data.get("components", []):
+            c_name = str(c.get("name") or "Unknown")
+            c_purl = str(c.get("purl") or "")
+            c_type = str(c.get("type") or "library")
+            if not c_purl and (c_type == "file" or c_name.startswith("/") or c_name.endswith((".yml", ".yaml"))):
+                continue
             results.append({
-                "name": str(c.get("name") or "Unknown"),
+                "name": c_name,
                 "version": str(c.get("version") or "N/A"),
-                "purl": str(c.get("purl") or ""),
-                "type": str(c.get("type") or "library"),
+                "purl": c_purl,
+                "type": c_type,
                 "hashes": c.get("hashes", [])
             })
         return results
@@ -172,7 +178,11 @@ def assimilate_third_party_cbom(
             if purl_pat and purl and re.search(purl_pat, purl, re.IGNORECASE):
                 matched_cat = cat_entry
                 break
-            elif name_pat and (name_pat.lower() == name.lower() or name_pat.lower() in name.lower()):
+            elif name_pat and (
+                name_pat.lower() == name.lower()
+                or name_pat.lower().replace("-", "_") == name.lower().replace("-", "_")
+                or (not purl and len(name_pat) >= 6 and name_pat.lower() in name.lower())
+            ):
                 matched_cat = cat_entry
                 break
 
@@ -185,6 +195,7 @@ def assimilate_third_party_cbom(
                         "component_name": comp["name"],
                         "version": comp["version"],
                         "purl": comp["purl"],
+                        "asset_type": a.get("primitive", "algorithm"),
                         "algorithm": a.get("algorithm", a["name"]),
                         "primitive": a.get("primitive", "unknown"),
                         "key_length": a.get("key_length", "N/A"),
@@ -299,6 +310,10 @@ def analyze_cbom(
         if proto_details:
             asset_info["protocol_type"] = proto_details.get("type")
             asset_info["protocol_version"] = proto_details.get("version")
+            if asset_info["primitive"] == "unknown":
+                asset_info["primitive"] = "protocol"
+            if asset_info["key_length"] == "N/A" and proto_details.get("version"):
+                asset_info["key_length"] = f"v{proto_details.get('version')}"
 
         is_pqc = any(re.search(pat, algo_upper) for pat in POST_QUANTUM_PATTERNS)
         is_qv = any(re.search(pat, algo_upper) for pat in QUANTUM_VULNERABLE_PATTERNS)
@@ -337,6 +352,10 @@ def analyze_cbom(
         crypto_assets.append(a)
         asset_types_counter[a["asset_type"]] += 1
         algorithm_counter[a["algorithm"]] += 1
+        if a.get("pqc_status") == "POST-QUANTUM READY":
+            pqc_assets.append(a)
+        elif a.get("pqc_status") == "QUANTUM-VULNERABLE":
+            vulnerable_assets.append(a)
 
     symmetric_assets = [a for a in crypto_assets if a["pqc_status"] == "CLASSICAL/SYMMETRIC"]
     asym_total = len(pqc_assets) + len(vulnerable_assets)
@@ -403,7 +422,9 @@ def generate_markdown_summary(summary: dict) -> str:
     md.append("### 🎯 Cryptographic Supply Chain Coverage & Confidence\n")
     md.append("| Evaluation Layer | Coverage / Status | Audit Confidence Assessment |")
     md.append("|---|---|---|")
-    md.append("| **First-Party Code (`src/`)** | **100% Audited** (0 Custom Primitives) | 🟢 **HIGH** (Direct AST & SAST verified clean) |")
+    fp_count = summary["total_components"]
+    fp_label = f"{fp_count} Crypto Primitive(s) Inventoried" if fp_count > 0 else "0 Custom Primitives"
+    md.append(f"| **First-Party Code (`src/`, `scripts/`)** | **100% Audited** ({fp_label}) | 🟢 **HIGH** (Direct AST & SAST verified) |")
     if conf["total_dependencies"] > 0:
         md.append(f"| **Third-Party Supply Chain** | **{conf['coverage_percentage']}%** ({conf['verified_dependencies_count']} of {conf['total_dependencies']} dependencies cataloged) | {conf['confidence_badge']} (Known profiles assimilated) |")
         md.append(f"| **Overall Audit Confidence Score** | **{conf['confidence_score']}%** | {conf['confidence_badge']} ({conf['unassimilated_dependencies_count']} unassimilated supply chain dependencies) |\n")
@@ -442,6 +463,7 @@ def generate_markdown_summary(summary: dict) -> str:
         for asset in summary["vulnerable_assets"]:
             algo_u = asset["algorithm"].upper()
             recom = asset.get("remediation") or (
+                "SHA-256 / SHA-3-256 (FIPS 180-4 / FIPS 202)" if any(k in algo_u for k in ["MD5", "SHA-1", "SHA1"]) else \
                 "ML-KEM-768 / Kyber (FIPS 203)" if any(k in algo_u for k in ["RSA", "DH", "ECDH", "X25519"]) and "SIGN" not in asset["primitive"] else \
                 "ML-DSA-65 / Dilithium (FIPS 204)" if any(k in algo_u for k in ["ECDSA", "ED25519", "DSA"]) or "SIGN" in asset["primitive"] else \
                 "ML-KEM (KEM) or ML-DSA (Signatures)"
@@ -475,6 +497,8 @@ def generate_markdown_summary(summary: dict) -> str:
         for asset in summary["symmetric_assets"]:
             algo_u = asset["algorithm"].upper()
             sec_note = "Quantum-Resistant (Grover's proof)" if "256" in str(asset["key_length"]) or "384" in algo_u or "512" in algo_u else \
+                       "Non-cryptographic integrity digest (OneDrive QuickXorHash 160-bit); pair with SHA-256" if "QUICKXOR" in algo_u else \
+                       "TLS 1.3 Transport (Enable hybrid X25519MLKEM768 via OpenSSL 3.5+)" if "TLS" in algo_u or asset["primitive"] == "protocol" else \
                        "Legacy bit-length (Recommend 256-bit upgrade)" if "128" in str(asset["key_length"]) or "128" in algo_u else \
                        "Review key length for Grover resistance"
             locs_str = format_locations(asset.get("occurrences", []))

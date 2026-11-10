@@ -228,6 +228,283 @@
           "remediation": "Ensure underlying libcurl backend supports hybrid post-quantum groups"
         }
       ]
+    },
+    {
+      "name": "cryptography",
+      "purlPattern": "^pkg:pypi/cryptography(@.*)?$",
+      "category": "crypto-library",
+      "confidence": "HIGH",
+      "source": "PyCA Cryptography / OpenSSL 3.x EVP Reference CBOM",
+      "cryptoAssets": [
+        {
+          "name": "PyCA OpenSSL EVP Symmetric & AEAD Suite (AES-256-GCM / ChaCha20-Poly1305 / Fernet)",
+          "primitive": "block-cipher",
+          "algorithm": "AES-256-GCM",
+          "pqc_status": "CLASSICAL/SYMMETRIC",
+          "key_length": "256",
+          "remediation": "256-bit AEAD is Grover-resistant; maintain 256-bit key lengths"
+        },
+        {
+          "name": "PyCA OpenSSL Asymmetric Primitives (RSA / ECDSA / Ed25519 / X25519)",
+          "primitive": "signature",
+          "algorithm": "RSA-2048 / ECDSA-P256 / Ed25519 / X25519",
+          "pqc_status": "QUANTUM-VULNERABLE",
+          "key_length": "2048 / 256",
+          "remediation": "Migrate asymmetric PKI/JWT workflows to OpenSSL 3.5+ ML-KEM (FIPS 203) and ML-DSA (FIPS 204)"
+        }
+      ]
+    },
+    {
+      "name": "msal",
+      "purlPattern": "^pkg:pypi/msal(@.*)?$",
+      "category": "auth-client",
+      "confidence": "HIGH",
+      "source": "Microsoft Authentication Library (MSAL) OAuth2/OIDC Specification",
+      "cryptoAssets": [
+        {
+          "name": "MSAL Entra ID OIDC JWT Signature & Token Binding (RS256)",
+          "primitive": "signature",
+          "algorithm": "RSA-2048",
+          "pqc_status": "QUANTUM-VULNERABLE",
+          "key_length": "2048",
+          "remediation": "Track Microsoft Entra ID post-quantum JWS/COSE token signing migration (ML-DSA)"
+        },
+        {
+          "name": "MSAL OAuth2 PKCE S256 Code Challenge Digest",
+          "primitive": "hash",
+          "algorithm": "SHA-256",
+          "pqc_status": "CLASSICAL/SYMMETRIC",
+          "key_length": "256",
+          "remediation": "SHA-256 PKCE code challenge is quantum-safe"
+        }
+      ]
+    },
+    {
+      "name": "pyjwt",
+      "purlPattern": "^pkg:pypi/pyjwt(@.*)?$",
+      "category": "jwt-library",
+      "confidence": "HIGH",
+      "source": "PyJWT RFC 7519 JWS Cryptographic Profile",
+      "cryptoAssets": [
+        {
+          "name": "JWS Asymmetric Signature Verification (RS256 / ES256)",
+          "primitive": "signature",
+          "algorithm": "RSA-2048 / ECDSA-P256",
+          "pqc_status": "QUANTUM-VULNERABLE",
+          "key_length": "2048 / 256",
+          "remediation": "Adopt IETF JOSE Post-Quantum ML-DSA signature algorithms when standardized"
+        },
+        {
+          "name": "JWS HMAC-SHA256 Token Authentication (HS256)",
+          "primitive": "mac",
+          "algorithm": "HMAC-SHA256",
+          "pqc_status": "CLASSICAL/SYMMETRIC",
+          "key_length": "256",
+          "remediation": "Quantum-resistant symmetric MAC"
+        }
+      ]
+    },
+    {
+      "name": "google-auth",
+      "purlPattern": "^pkg:pypi/google-auth(@.*)?$",
+      "category": "auth-client",
+      "confidence": "HIGH",
+      "source": "Google Cloud Auth & OAuth2 JWT Specification",
+      "cryptoAssets": [
+        {
+          "name": "Google OAuth2 / Service Account JWT Signature (RS256 / ES256)",
+          "primitive": "signature",
+          "algorithm": "RSA-2048",
+          "pqc_status": "QUANTUM-VULNERABLE",
+          "key_length": "2048",
+          "remediation": "Migrate to Google Cloud post-quantum workload identity credentials when available"
+        }
+      ]
+    },
+    {
+      "name": "google-auth-oauthlib",
+      "purlPattern": "^pkg:pypi/google-auth-oauthlib(@.*)?$",
+      "category": "auth-client",
+      "confidence": "HIGH",
+      "source": "Google OAuth 2.0 InstalledAppFlow & PKCE Specification",
+      "cryptoAssets": [
+        {
+          "name": "OAuth2 InstalledAppFlow PKCE S256 & HTTPS Token Exchange",
+          "primitive": "hash",
+          "algorithm": "SHA-256",
+          "pqc_status": "CLASSICAL/SYMMETRIC",
+          "key_length": "256",
+          "remediation": "RFC 7636 S256 PKCE verifier is quantum-resistant"
+        }
+      ]
+    },
+    {
+      "name": "google-api-python-client",
+      "purlPattern": "^pkg:pypi/google-api-python-client(@.*)?$",
+      "category": "cloud-sdk",
+      "confidence": "HIGH",
+      "source": "Google Discovery REST API TLS Transport Profile",
+      "cryptoAssets": [
+        {
+          "name": "Google API HTTPS / TLS 1.3 Client Channel",
+          "primitive": "protocol",
+          "algorithm": "TLS 1.3",
+          "pqc_status": "CLASSICAL/SYMMETRIC",
+          "key_length": "256",
+          "remediation": "Google endpoints negotiate hybrid X25519MLKEM768 when supported by client OpenSSL 3.5+"
+        }
+      ]
+    },
+    {
+      "name": "rsa",
+      "purlPattern": "^pkg:pypi/rsa(@.*)?$",
+      "category": "crypto-library",
+      "confidence": "HIGH",
+      "source": "Python-RSA PKCS#1 v1.5 Cryptographic Profile",
+      "cryptoAssets": [
+        {
+          "name": "Pure-Python RSA PKCS#1 v1.5 Signature & Encryption",
+          "primitive": "signature",
+          "algorithm": "RSA-2048",
+          "pqc_status": "QUANTUM-VULNERABLE",
+          "key_length": "2048",
+          "remediation": "Replace pure-Python rsa with PyCA cryptography and plan ML-DSA migration"
+        }
+      ]
+    },
+    {
+      "name": "requests",
+      "purlPattern": "^pkg:pypi/requests(@.*)?$",
+      "category": "http-client",
+      "confidence": "HIGH",
+      "source": "Python Requests HTTPS/TLS Transport Profile",
+      "cryptoAssets": [
+        {
+          "name": "Requests HTTPS Session TLS 1.2 / 1.3 Client",
+          "primitive": "protocol",
+          "algorithm": "TLS 1.3",
+          "pqc_status": "CLASSICAL/SYMMETRIC",
+          "key_length": "256",
+          "remediation": "Link Python ssl module against OpenSSL 3.5+ for hybrid X25519MLKEM768 TLS key exchange"
+        }
+      ]
+    },
+    {
+      "name": "urllib3",
+      "purlPattern": "^pkg:pypi/urllib3(@.*)?$",
+      "category": "http-client",
+      "confidence": "HIGH",
+      "source": "urllib3 SSLContext & X.509 Verification Profile",
+      "cryptoAssets": [
+        {
+          "name": "urllib3 TLS PoolManager & X.509 Peer Verification",
+          "primitive": "protocol",
+          "algorithm": "TLS 1.2 / 1.3 (ECDHE / RSA / ECDSA)",
+          "pqc_status": "QUANTUM-VULNERABLE",
+          "key_length": "2048 / 256",
+          "remediation": "Enable post-quantum hybrid TLS groups (X25519MLKEM768) in underlying Python ssl runtime"
+        }
+      ]
+    },
+    {
+      "name": "certifi",
+      "purlPattern": "^pkg:pypi/certifi(@.*)?$",
+      "category": "trust-store",
+      "confidence": "HIGH",
+      "source": "Certifi Mozilla CA Root Bundle",
+      "cryptoAssets": [
+        {
+          "name": "Certifi Mozilla Root CA Bundle (RSA-2048/4096 & ECDSA P-256/P-384)",
+          "primitive": "certificate",
+          "algorithm": "RSA-2048 / ECDSA-P256",
+          "pqc_status": "QUANTUM-VULNERABLE",
+          "key_length": "2048-4096",
+          "remediation": "Track Mozilla CA program transition to ML-DSA / SLH-DSA root trust anchors"
+        }
+      ]
+    },
+    {
+      "name": "pymysql",
+      "purlPattern": "^pkg:pypi/pymysql(@.*)?$",
+      "category": "database-driver",
+      "confidence": "HIGH",
+      "source": "PyMySQL Authentication & TLS Protocol Specification",
+      "cryptoAssets": [
+        {
+          "name": "MySQL caching_sha2_password Digest & RSA Key Exchange",
+          "primitive": "hash",
+          "algorithm": "SHA-256",
+          "pqc_status": "CLASSICAL/SYMMETRIC",
+          "key_length": "256",
+          "remediation": "Enforce caching_sha2_password over TLS 1.3; disable legacy mysql_native_password (SHA-1)"
+        },
+        {
+          "name": "MySQL Legacy mysql_native_password & RSA Public Key Encryption",
+          "primitive": "signature",
+          "algorithm": "RSA-2048 / SHA-1",
+          "pqc_status": "QUANTUM-VULNERABLE",
+          "key_length": "2048 / 160",
+          "remediation": "Require TLS 1.3 transport for MySQL connections to avoid standalone RSA/SHA-1 password exchange"
+        }
+      ]
+    },
+    {
+      "name": "requests-oauthlib",
+      "purlPattern": "^pkg:pypi/(requests-oauthlib|oauthlib)(@.*)?$",
+      "category": "auth-client",
+      "confidence": "HIGH",
+      "source": "OAuthlib RFC 5849 / RFC 6749 Cryptographic Profile",
+      "cryptoAssets": [
+        {
+          "name": "OAuth 2.0 Bearer / HMAC-SHA256 Request Signing",
+          "primitive": "mac",
+          "algorithm": "HMAC-SHA256",
+          "pqc_status": "CLASSICAL/SYMMETRIC",
+          "key_length": "256",
+          "remediation": "Symmetric HMAC-SHA256 is quantum-resistant"
+        }
+      ]
+    },
+    {
+      "name": "httplib2",
+      "purlPattern": "^pkg:pypi/(httplib2|google-auth-httplib2)(@.*)?$",
+      "category": "http-client",
+      "confidence": "HIGH",
+      "source": "httplib2 SSL/TLS Transport Profile",
+      "cryptoAssets": [
+        {
+          "name": "httplib2 HTTPS TLS Client Socket",
+          "primitive": "protocol",
+          "algorithm": "TLS 1.3",
+          "pqc_status": "CLASSICAL/SYMMETRIC",
+          "key_length": "256",
+          "remediation": "Uses Python ssl default context"
+        }
+      ]
+    },
+    {
+      "name": "pyasn1-modules",
+      "purlPattern": "^pkg:pypi/pyasn1(-modules)?(@.*)?$",
+      "category": "asn1-codec",
+      "confidence": "HIGH",
+      "source": "Verified Cryptographically Inert (ASN.1 Data Structure Parser)",
+      "cryptoAssets": []
+    },
+    {
+      "name": "python-media-utilities",
+      "purlPattern": "^pkg:pypi/(pillow|pillow-heif|rawpy|exifread|reverse-geocoder|reverse_geocoder|pycountry|rich|tqdm|python-dotenv|cachetools|uritemplate|charset-normalizer|idna|cffi|colorama|google-api-core|markdown-it-py|mdurl|numpy|pygments|scipy|typing-extensions|pycparser|packaging|six|proto-plus|protobuf|googleapis-common-protos)(@.*)?$",
+      "category": "application-library",
+      "confidence": "HIGH",
+      "source": "Verified Cryptographically Inert (Media Decoding, EXIF, Geocoding, FFI & CLI Formatting)",
+      "cryptoAssets": []
+    },
+    {
+      "name": "github-actions-ci-toolchain",
+      "purlPattern": "^pkg:github/(actions|anchore|aquasecurity|cbomkit|docker|gitleaks|returntocorp|semgrep|softprops|wagoid|oras-project)/.*(@.*)?$",
+      "category": "ci-cd-action",
+      "confidence": "HIGH",
+      "source": "Verified CI/CD DevSecOps Pipeline Action (Pinned 40-char Commit SHA)",
+      "cryptoAssets": []
     }
   ]
 }

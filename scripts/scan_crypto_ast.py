@@ -31,13 +31,23 @@ CRYPTO_PATTERNS = [
     {"pattern": r"\b(?:Ed25519|Ed448)\b", "name": "Ed25519", "primitive": "signature", "pqc_status": "QUANTUM-VULNERABLE", "param": "25519"},
     {"pattern": r"\b(?:Diffie[-_ ]?Hellman|DHE-)\b", "name": "Diffie-Hellman", "primitive": "key-agreement", "pqc_status": "QUANTUM-VULNERABLE"},
 
-    # Classical Symmetric & Hashing (Quantum-Resistant against Grover)
-    {"pattern": r"\b(?:AES[-_]?(?:128|192|256)?[-_]?(?:GCM|CBC|CTR)?|createCipheriv\(['\"]aes|Aes\.Create)\b", "name": "AES-256-GCM", "primitive": "block-cipher", "pqc_status": "CLASSICAL/SYMMETRIC", "param": "256"},
-    {"pattern": r"\b(?:CHACHA20[-_]?POLY1305|chacha20)\b", "name": "ChaCha20-Poly1305", "primitive": "stream-cipher", "pqc_status": "CLASSICAL/SYMMETRIC", "param": "256"},
-    {"pattern": r"\b(?:SHA[-_]?256|sha256|createHash\(['\"]sha256)\b", "name": "SHA-256", "primitive": "hash", "pqc_status": "CLASSICAL/SYMMETRIC", "param": "256"},
-    {"pattern": r"\b(?:SHA[-_]?384|sha384)\b", "name": "SHA-384", "primitive": "hash", "pqc_status": "CLASSICAL/SYMMETRIC", "param": "384"},
-    {"pattern": r"\b(?:SHA[-_]?512|sha512)\b", "name": "SHA-512", "primitive": "hash", "pqc_status": "CLASSICAL/SYMMETRIC", "param": "512"},
-    {"pattern": r"\b(?:SHA[-_]?3|sha3)\b", "name": "SHA-3", "primitive": "hash", "pqc_status": "CLASSICAL/SYMMETRIC", "param": "256"}
+    # Classical Symmetric, MAC & Hashing (Quantum-Resistant against Grover when >=256-bit)
+    {"pattern": r"\b(?:AES[-_]?(?:128|192|256)?[-_]?(?:GCM|CBC|CTR)?|createCipheriv\(['\"]aes|Aes\.Create|AESGCM\()\b", "name": "AES-256-GCM", "primitive": "block-cipher", "pqc_status": "CLASSICAL/SYMMETRIC", "param": "256"},
+    {"pattern": r"\b(?:Fernet\(|fernet\.Fernet)\b", "name": "Fernet-AES-128-CBC", "primitive": "ae", "pqc_status": "CLASSICAL/SYMMETRIC", "param": "128"},
+    {"pattern": r"\b(?:CHACHA20[-_]?POLY1305|chacha20|ChaCha20Poly1305)\b", "name": "ChaCha20-Poly1305", "primitive": "stream-cipher", "pqc_status": "CLASSICAL/SYMMETRIC", "param": "256"},
+    {"pattern": r"\b(?:hmac\.new\(|hmac\.compare_digest\(|HmacSHA256|HMAC\()\b", "name": "HMAC-SHA256", "primitive": "mac", "pqc_status": "CLASSICAL/SYMMETRIC", "param": "256"},
+    {"pattern": r"\b(?:SHA[-_]?256|sha256|hashlib\.sha256|createHash\(['\"]sha256)\b", "name": "SHA-256", "primitive": "hash", "pqc_status": "CLASSICAL/SYMMETRIC", "param": "256"},
+    {"pattern": r"\b(?:SHA[-_]?384|sha384|hashlib\.sha384)\b", "name": "SHA-384", "primitive": "hash", "pqc_status": "CLASSICAL/SYMMETRIC", "param": "384"},
+    {"pattern": r"\b(?:SHA[-_]?512|sha512|hashlib\.sha512)\b", "name": "SHA-512", "primitive": "hash", "pqc_status": "CLASSICAL/SYMMETRIC", "param": "512"},
+    {"pattern": r"\b(?:SHA[-_]?3|sha3|hashlib\.sha3_256)\b", "name": "SHA-3", "primitive": "hash", "pqc_status": "CLASSICAL/SYMMETRIC", "param": "256"},
+    {"pattern": r"\b(?:def\s+quickxor_hash|quickxor_hash\(|QuickXorHash)\b", "name": "QuickXorHash", "primitive": "hash", "pqc_status": "CLASSICAL/SYMMETRIC", "param": "160"},
+
+    # Classical / Legacy Weak Digest Algorithms (Collision-Vulnerable / Quantum-Vulnerable)
+    {"pattern": r"\b(?:hashlib\.sha1\(|createHash\(['\"]sha1|MessageDigest\.getInstance\(['\"]SHA-?1)\b", "name": "SHA-1", "primitive": "hash", "pqc_status": "QUANTUM-VULNERABLE", "param": "160"},
+    {"pattern": r"\b(?:hashlib\.md5\(|createHash\(['\"]md5|MessageDigest\.getInstance\(['\"]MD5)\b", "name": "MD5", "primitive": "hash", "pqc_status": "QUANTUM-VULNERABLE", "param": "128"},
+
+    # Transport Security & OAuth2/OIDC Cryptographic Client Flows
+    {"pattern": r"\b(?:ssl\.create_default_context\(|SSLContext\(|TLSVersion\.TLSv1_3|InstalledAppFlow\.from_client_secrets_file\(|ConfidentialClientApplication\(|PublicClientApplication\()\b", "name": "TLS-1.3", "primitive": "protocol", "pqc_status": "CLASSICAL/SYMMETRIC", "param": "1.3"}
 ]
 
 # File extensions to scan
@@ -48,12 +58,14 @@ SOURCE_EXTENSIONS = {
 
 IGNORED_DIRS = {
     ".git", "node_modules", "vendor", "__pycache__", ".venv", "venv",
-    "target", "dist", "build", "oss", ".idea", ".vscode", "scripts", "tests", "fixtures"
+    "target", "dist", "build", "oss", ".idea", ".vscode", "tests", "fixtures"
 }
 
 IGNORED_FILES = {
     "scan_crypto_ast.py", "analyze_cbom.py", "test_boms.sh", "generate_boms.sh",
-    "parse_cbom.py", "parse_gpg.py", "inject_algo.py"
+    "fetch_oci_cbom.py", "enrich_sbom_gradle.py", "enrich_sbom_python.py",
+    "update_os_inventory.py", "attach_oci_bom.sh", "install_to_repo.sh",
+    "adr_gatekeeper.py", "pre_commit.py", "parse_cbom.py", "parse_gpg.py", "inject_algo.py"
 }
 
 # Ignore parser tools, benchmarks, and test fixtures when scanning production AST
@@ -182,8 +194,8 @@ def reconcile_with_cbom(call_sites: List[Dict[str, Any]], cbom_path: Path):
     def matches_existing(candidate: str, existing: str) -> bool:
         if candidate == existing:
             return True
-        # Prevent false collisions (e.g., SHA-3 vs SHA-384)
-        if candidate.startswith("SHA-3") and existing.startswith("SHA-3") and candidate != existing:
+        # Prevent false collisions across distinct SHA family members (SHA-1, SHA-256, SHA-384, SHA-512, SHA-3)
+        if candidate.startswith("SHA-") and existing.startswith("SHA-") and candidate != existing:
             return False
         base_cand = candidate.split("-")[0]
         base_exist = existing.split("-")[0]
@@ -218,10 +230,17 @@ def reconcile_with_cbom(call_sites: List[Dict[str, Any]], cbom_path: Path):
                 occurrences.append(occ_entry)
         else:
             # Create new component
-            new_comp = {
-                "type": "cryptographic-asset",
-                "name": site["name"],
-                "cryptoProperties": {
+            is_proto = site["primitive"] == "protocol"
+            crypto_props = (
+                {
+                    "assetType": "protocol",
+                    "protocolProperties": {
+                        "type": "tls",
+                        "version": site["parameter_set"]
+                    }
+                }
+                if is_proto
+                else {
                     "assetType": "algorithm",
                     "algorithmProperties": {
                         "name": site["name"],
@@ -229,7 +248,12 @@ def reconcile_with_cbom(call_sites: List[Dict[str, Any]], cbom_path: Path):
                         "parameterSetIdentifier": site["parameter_set"],
                         "executionEnvironment": "software-plain-ram"
                     }
-                },
+                }
+            )
+            new_comp = {
+                "type": "cryptographic-asset",
+                "name": site["name"],
+                "cryptoProperties": crypto_props,
                 "evidence": {
                     "occurrences": [occ_entry]
                 }

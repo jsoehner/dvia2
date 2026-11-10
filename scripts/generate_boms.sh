@@ -153,6 +153,18 @@ fi
 
 log "SBOM generated successfully: $SBOM_OUTPUT"
 
+# Enrich CycloneDX SBOM with Python or Gradle dependencies when scanning a directory
+if [[ "$TARGET_TYPE" == "dir" && "$SBOM_FORMAT" == "cyclonedx-json" ]]; then
+    if [[ -f "${SKILL_DIR}/scripts/enrich_sbom_python.py" && ( -f "${TARGET}/requirements.txt" || -f "${TARGET}/pyproject.toml" ) ]]; then
+        log "Enriching CycloneDX SBOM with Python dependencies..."
+        python3 "${SKILL_DIR}/scripts/enrich_sbom_python.py" "$SBOM_OUTPUT" "$TARGET" || true
+    fi
+    if [[ -f "${SKILL_DIR}/scripts/enrich_sbom_gradle.py" && ( -f "${TARGET}/build.gradle" || -f "${TARGET}/build.gradle.kts" ) ]]; then
+        log "Enriching CycloneDX SBOM with Gradle dependencies..."
+        (cd "$TARGET" && python3 "${SKILL_DIR}/scripts/enrich_sbom_gradle.py" "$SBOM_OUTPUT") || true
+    fi
+fi
+
 # ------------------------------------------------------------------------------
 # 2. Discover or Generate CBOM (Cryptographic Bill of Materials)
 # ------------------------------------------------------------------------------
@@ -171,18 +183,26 @@ if [[ "$TARGET_TYPE" == "docker" ]]; then
 fi
 
 if [[ "$FETCHED_FROM_OCI" == "false" ]]; then
-    if [[ ${#CDXGEN_CMD[@]} -eq 0 ]]; then
+    if [[ ${#CDXGEN_CMD[@]} -gt 0 ]]; then
+        log "No pre-attached OCI CBOM found. Running deep cryptographic analysis (${CDXGEN_CMD[*]} --include-crypto)..."
+        if [[ "$TARGET_TYPE" == "docker" ]]; then
+            "${CDXGEN_CMD[@]}" -t docker --include-crypto -o "$CBOM_OUTPUT" "$TARGET" || true
+        else
+            "${CDXGEN_CMD[@]}" --include-crypto -o "$CBOM_OUTPUT" "$TARGET" || true
+        fi
+    elif [[ "$TARGET_TYPE" == "dir" && -f "${SKILL_DIR}/scripts/scan_crypto_ast.py" ]]; then
+        log "cdxgen not found; initializing CBOM via Semantic AST Cryptographic Scanner..."
+        python3 "${SKILL_DIR}/scripts/scan_crypto_ast.py" "$TARGET" --cbom "$CBOM_OUTPUT" --output-json "${OUTPUT_DIR}/crypto-callsites.json"
+    else
         echo "Error: 'cdxgen' or 'npx' is required to generate CBOM with cryptographic inventory." >&2
         echo "Install via: npm install -g @cyclonedx/cdxgen" >&2
         exit 1
     fi
+fi
 
-    log "No pre-attached OCI CBOM found. Running deep cryptographic analysis (${CDXGEN_CMD[*]} --include-crypto)..."
-    if [[ "$TARGET_TYPE" == "docker" ]]; then
-        "${CDXGEN_CMD[@]}" -t docker --include-crypto -o "$CBOM_OUTPUT" "$TARGET"
-    else
-        "${CDXGEN_CMD[@]}" --include-crypto -o "$CBOM_OUTPUT" "$TARGET"
-    fi
+if [[ "$TARGET_TYPE" == "dir" && -f "${SKILL_DIR}/scripts/scan_crypto_ast.py" ]]; then
+    log "Reconciling CBOM with Semantic AST Cryptographic Scanner..."
+    python3 "${SKILL_DIR}/scripts/scan_crypto_ast.py" "$TARGET" --cbom "$CBOM_OUTPUT" --output-json "${OUTPUT_DIR}/crypto-callsites.json"
 fi
 
 log "CBOM resolved successfully: $CBOM_OUTPUT"
