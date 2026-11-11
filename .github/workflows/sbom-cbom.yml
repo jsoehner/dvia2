@@ -16,6 +16,7 @@ on:
 permissions:
   contents: write
   id-token: write
+  pull-requests: write
 
 jobs:
   generate-and-verify-boms:
@@ -24,130 +25,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (Node 24)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - name: Create output directory
-        run: mkdir -p oss
-
-      - name: Set up Python for Cryptographic Auditing & Dependency Resolution
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - name: Run Multi-Language SBOM, CBOM & PQC Governance
+        uses: jsoehner/jsi-bom-actions@f392195bb791bc9e7d39023d320f7d07175c2ac4 # v1.1.0
         with:
-          python-version: '3.11'
-
-      # -------------------------------------------------------------
-      # 1. Generate SBOM (CycloneDX and SPDX via Anchore / Syft)
-      # -------------------------------------------------------------
-      - name: Generate CycloneDX SBOM (Anchore / Syft)
-        uses: anchore/sbom-action@006b7ce8314066bdf1765b4500370d40fa6917a3 # v0.24.2
-        with:
-          path: .
-          format: cyclonedx-json
-          output-file: oss/sbom.cyclonedx.json
-          upload-artifact: false
-
-      - name: Enrich SBOM with Python Dependencies
-        run: |
-          if [ -f requirements.txt ]; then
-            python3 -m pip install --quiet -r requirements.txt || true
-          fi
-          if [ -f scripts/enrich_sbom_python.py ]; then
-            python3 scripts/enrich_sbom_python.py oss/sbom.cyclonedx.json .
-          fi
-
-      - name: Generate SPDX SBOM (Anchore / Syft)
-        uses: anchore/sbom-action@006b7ce8314066bdf1765b4500370d40fa6917a3 # v0.24.2
-        with:
-          path: .
-          format: spdx-json
-          output-file: oss/sbom.spdx.json
-          upload-artifact: false
-
-      # -------------------------------------------------------------
-      # 2. Generate CBOM (cbomkit-action)
-      # -------------------------------------------------------------
-      - name: Generate Cryptographic Bill of Materials (CBOM)
-        uses: cbomkit/cbomkit-action@34a3d960625ae7f7f1b59455eff93a96df090eb7 # v2.3.0
-        id: cbom
-        continue-on-error: true
-        env:
-          CBOMKIT_OUTPUT_DIR: oss
-          CBOMKIT_EXCLUDE: "(^|/)scripts/(scan_crypto_ast|analyze_cbom|fetch_oci_cbom|update_os_inventory|enrich_sbom).*|(^|/)tests/.*"
-
-      - name: Fix permissions for container-generated artifacts
-        run: sudo chown -R $(id -u):$(id -g) oss/ || true
-
-      # -------------------------------------------------------------
-      # 3. Dual-Engine Semantic AST Crypto Discovery & Reconciliation
-      # -------------------------------------------------------------
-      - name: Semantic AST Cryptographic Scan & CBOM Reconciliation
-        run: |
-          if [ -f scripts/scan_crypto_ast.py ]; then
-            python3 scripts/scan_crypto_ast.py . \
-              --cbom oss/cbom.json \
-              --output-json oss/crypto-callsites.json
-          fi
-
-      # -------------------------------------------------------------
-      # 4. Automated Verification & Test Harness in CI
-      # -------------------------------------------------------------
-      - name: Run BOM Verification and Cryptographic Audit Harness
-        run: |
-          if [ -f scripts/test_boms.sh ]; then
-            bash scripts/test_boms.sh oss
-          fi
-
-      # -------------------------------------------------------------
-      # 5. Post-Quantum Cryptography (PQC) Readiness Assessment
-      # -------------------------------------------------------------
-      - name: Generate PQC Migration Dashboard & Step Summary
-        run: |
-          if [ -f scripts/analyze_cbom.py ]; then
-            SBOM_ARG=""
-            if [ -f oss/sbom.cyclonedx.json ]; then
-              SBOM_ARG="--sbom oss/sbom.cyclonedx.json"
-            elif [ -f oss/sbom.spdx.json ]; then
-              SBOM_ARG="--sbom oss/sbom.spdx.json"
-            fi
-            EXT_ARG=""
-            if [ -f oss/upstream_cbom.json ]; then
-              EXT_ARG="--external-cbom oss/upstream_cbom.json"
-            fi
-            python3 scripts/analyze_cbom.py oss/cbom.json \
-              $SBOM_ARG \
-              $EXT_ARG \
-              --json oss/crypto-analysis.json \
-              --markdown oss/crypto-summary.md \
-              --step-summary
-          fi
-
-      # -------------------------------------------------------------
-      # 6. Publish Cryptographic Audit Report to Repository (docs/security)
-      # -------------------------------------------------------------
-      - name: Publish Cryptographic Audit Report to Repository
-        if: github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]')
-        run: |
-          if [ -f oss/crypto-summary.md ]; then
-            mkdir -p docs/security
-            cp oss/crypto-summary.md docs/security/CRYPTOGRAPHIC_AUDIT.md
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add docs/security/CRYPTOGRAPHIC_AUDIT.md
-            if git diff --staged --quiet; then
-              echo "No changes in cryptographic audit report."
-            else
-              git commit -m "docs(security): update cryptographic audit & PQC migration report [skip ci]"
-              git push
-            fi
-          fi
-
-      # -------------------------------------------------------------
-      # 7. Upload All BOM Artifacts
-      # -------------------------------------------------------------
-      - name: Upload BOM Artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: bom-artifacts
-          path: oss/
-          retention-days: 90
+          target-dir: '.'
+          output-dir: 'oss'
+          publish-audit-report: 'true'
+          comment-pr: 'true'
+          upload-artifacts: 'true'
+          retention-days: '90'
