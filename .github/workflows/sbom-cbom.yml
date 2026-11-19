@@ -30,7 +30,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run Multi-Language SBOM, CBOM & PQC Governance
-        uses: jsoehner/jsi-bom-actions@ac3f2a1bee0f6206b31acba1d107520f4cd4c06f # v1.1.0
+        uses: jsoehner/jsi-bom-actions@8aa45737262ef8de42a6bf817080aefef03090f1 # v1.1.1
         with:
           target-dir: '.'
           output-dir: 'oss'
